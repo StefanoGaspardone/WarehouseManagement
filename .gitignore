@@ -29,6 +29,7 @@ logs/
 # Environment and secrets (keep templates tracked)
 .env
 .env.*
+*.properties
 !.env.example
 *.pem
 *.p12
