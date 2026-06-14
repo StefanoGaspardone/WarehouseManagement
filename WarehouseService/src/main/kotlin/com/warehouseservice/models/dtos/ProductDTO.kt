@@ -25,8 +25,24 @@ data class ProductDTO(
     val updatedAt: Instant?,
 )
 
-@Schema(description = "DTO creating a product")
+@Schema(description = "DTO for creating a product")
 data class CreateProductDTO(
+    @field:NotBlank
+    @field:Size(max = 255)
+    @field:Schema(description = "Name of the product", example = "Product 1")
+    val name: String,
+
+    @field:NotBlank
+    @field:Pattern(
+        regexp = "^[0-9]{8,13}$",
+        message = "The bar code must contains between 8 e 13 digits"
+    )
+    @field:Schema(description = "Unique bar code of the product", example = "8001120896247")
+    val barCode: String
+)
+
+@Schema(description = "DTO for updating a product")
+data class UpdateProductDTO(
     @field:NotBlank
     @field:Size(max = 255)
     @field:Schema(description = "Name of the product", example = "Product 1")

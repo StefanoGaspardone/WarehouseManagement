@@ -4,6 +4,7 @@ import com.warehouseservice.exceptions.ErrorResponse
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
+import com.warehouseservice.models.dtos.UpdateProductDTO
 import com.warehouseservice.services.ProductService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,6 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -48,7 +50,7 @@ class ProductController(
     ): ResponseEntity<ProductPageDTO> =
         ResponseEntity.ok(productService.findAll(page, size, name, barCode, sort))
 
-    @Operation(summary = "Get product by ID")
+    @Operation(summary = "Get a product")
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "200", description = "Ok - Successfully retrieved product",
@@ -94,7 +96,41 @@ class ProductController(
     fun create(@Valid @RequestBody createProductDTO: CreateProductDTO): ResponseEntity<ProductDTO> =
         ResponseEntity.status(HttpStatus.CREATED).body(productService.create(createProductDTO))
 
-    @Operation(summary = "Delete video by ID")
+    @Operation(summary = "Update a product")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "Ok - Successfully updated product",
+                content = [Content(schema = Schema(implementation = ProductDTO::class))],
+            ),
+            ApiResponse(responseCode = "409", description = "Conflict - Product with bar code already exists",
+                content = [Content(
+                    mediaType = "application/json",
+                    schema = Schema(implementation = ErrorResponse::class),
+                    examples = [ExampleObject(
+                        name = "ProductWithBarCodeAlreadyExistsException",
+                        summary = "Product with bar code already exists",
+                        value = "{\"timestamp\":\"2026-03-31T19:00:00Z\",\"status\":409,\"error\":\"Conflict\",\"message\":\"Product with bar code 8001120896247 already exists\"}"
+                    )]
+                )],
+            ),
+            ApiResponse(responseCode = "404", description = "Not Found - Product with specified ID does not exist",
+                content = [Content(
+                    mediaType = "application/json",
+                    schema = Schema(implementation = ErrorResponse::class),
+                    examples = [ExampleObject(
+                        name = "ProductNotFoundException",
+                        summary = "Product not found",
+                        value = "{\"timestamp\":\"2026-03-31T19:00:00Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Product with id 3fa85f64-5717-4562-b3fc-2c963f66afa6 not found\"}"
+                    )]
+                )],
+            ),
+        ],
+    )
+    @PatchMapping("/{id}")
+    fun update(@PathVariable id: UUID, @Valid @RequestBody updateProductDTO: UpdateProductDTO): ResponseEntity<ProductDTO> =
+        ResponseEntity.ok(productService.update(id, updateProductDTO))
+
+    @Operation(summary = "Delete a product")
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "No Content - Successfully deleted product",

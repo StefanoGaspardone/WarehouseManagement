@@ -33,7 +33,7 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0")
     implementation("org.springdoc:springdoc-openapi-starter-common:2.7.0")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -45,10 +45,19 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("io.mockk:mockk:1.14.2")
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("com.ninja-squad:springmockk:5.0.1")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-resttestclient")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly("org.springframework.boot:spring-boot-restclient")
 }
 
 kotlin {
@@ -95,7 +104,7 @@ tasks.jacocoTestReport {
                     "**/models/dtos/**",
                     "**/models/entities/**",
                     "**/repositories/**",
-                    "**/seeders/**",
+                    "**/specifications/**",
                     "**/*Application*",
                     "**/*ApplicationKt*",
                     "**/exceptions/**",

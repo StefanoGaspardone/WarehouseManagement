@@ -7,6 +7,7 @@ import com.warehouseservice.models.dtos.PageableInfo
 import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
 import com.warehouseservice.models.dtos.SortInfo
+import com.warehouseservice.models.dtos.UpdateProductDTO
 import com.warehouseservice.models.entities.Product
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.specifications.ProductSpecifications
@@ -72,19 +73,45 @@ class ProductService(
         try {
             productRepository.findByBarCode(createProductDTO.barCode).ifPresent { throw ProductWithBarCodeAlreadyExistsException("Product with bar code ${createProductDTO.barCode} already exists") }
 
-            val product = Product(
+            var product = Product(
                 name = createProductDTO.name,
                 barCode = createProductDTO.barCode,
             )
-            productRepository.save(product)
+            product = productRepository.save(product)
 
-            logger.info("\n\t[INFO] [product_service][create] Created product with id {} with fields:\n\tname = {}\n\tbarCode = {}", product.id, createProductDTO.barCode, createProductDTO.barCode)
+            logger.info("\n\t[INFO] [product_service][create] Created product with fields:\n\tname = {}\n\tbarCode = {}", createProductDTO.barCode, createProductDTO.barCode)
             return product.toDTO()
         } catch(e: ProductWithBarCodeAlreadyExistsException) {
             logger.warn("\n\t[WARN] [product_service][create] Product with bar code {} already exists", createProductDTO.barCode)
             throw e
         } catch(e: Exception) {
             logger.error("\n\t[ERROR] [product_service][create] Error creating product with fields:\n\tname = {}\n\tbarCode = {}: {}", createProductDTO.barCode, createProductDTO.barCode, e.message, e)
+            throw e
+        }
+    }
+
+    fun update(id: UUID, updateProductDTO: UpdateProductDTO): ProductDTO {
+        logger.debug("\n\t[DEBUG] [product_service][update] Updating product with id {} with fields:\n\tname = {}\n\tbarCode = {}", id, updateProductDTO.barCode, updateProductDTO.barCode)
+
+        try {
+            var product = productRepository.findById(id).orElseThrow { ProductNotFoundException("Product with id $id not found") }
+            productRepository.findByBarCode(updateProductDTO.barCode).ifPresent { throw ProductWithBarCodeAlreadyExistsException("Product with bar code ${updateProductDTO.barCode} already exists") }
+
+            product.name = updateProductDTO.name
+            product.barCode = updateProductDTO.barCode
+
+            product = productRepository.save(product)
+
+            logger.info("\n\t[INFO] [product_service][update] Updated product with id {} with fields:\n\tname = {}\n\tbarCode = {}", id, updateProductDTO.barCode, updateProductDTO.barCode)
+            return product.toDTO()
+        } catch(e: ProductNotFoundException) {
+            logger.warn("\n\t[WARN] [product_service][update] Product with id {} not found", id)
+            throw e
+        } catch(e: ProductWithBarCodeAlreadyExistsException) {
+            logger.warn("\n\t[WARN] [product_service][update] Product with bar code {} already exists", updateProductDTO.barCode)
+            throw e
+        } catch(e: Exception) {
+            logger.error("\n\t[ERROR] [product_service][update] Error updating product with id {} with fields:\n\tname = {}\n\tbarCode = {}: {}", id, updateProductDTO.barCode, updateProductDTO.barCode, e.message, e)
             throw e
         }
     }
