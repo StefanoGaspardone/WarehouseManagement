@@ -1,5 +1,6 @@
 package com.warehouseservice.services
 
+import com.warehouseservice.exceptions.InvalidProductStatusException
 import com.warehouseservice.exceptions.ProductNotFoundException
 import com.warehouseservice.exceptions.ProductWithBarCodeAlreadyExistsException
 import com.warehouseservice.models.dtos.CreateProductDTO
@@ -8,7 +9,9 @@ import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
 import com.warehouseservice.models.dtos.SortInfo
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.specifications.ProductSpecifications
 import jakarta.transaction.Transactional
@@ -112,6 +115,40 @@ class ProductService(
             throw e
         } catch(e: Exception) {
             logger.error("\n\t[ERROR] [product_service][update] Error updating product with id {} with fields:\n\tname = {}\n\tbarCode = {}: {}", id, updateProductDTO.barCode, updateProductDTO.barCode, e.message, e)
+            throw e
+        }
+    }
+
+    @Transactional
+    fun updateStatus(id: UUID, dto: UpdateProductStatusDTO): ProductDTO {
+        logger.debug("\n\t[DEBUG] [product_service][update_status] Updating status of product with id {}", id)
+
+        try {
+            var product = productRepository.findById(id).orElseThrow { ProductNotFoundException("Product with id $id not found") }
+
+            if(dto.status == ProductStatus.ASSIGNED && dto.assignedTo.isNullOrBlank()) {
+                throw InvalidProductStatusException("assignedTo is required when status is ASSIGNED")
+            }
+
+            if(dto.status != ProductStatus.ASSIGNED && dto.assignedTo != null) {
+                throw InvalidProductStatusException("assignedTo must be null when status is not ASSIGNED")
+            }
+
+            product.status = dto.status
+            product.assignedTo = if(dto.status == ProductStatus.ASSIGNED) dto.assignedTo else null
+
+            product = productRepository.saveAndFlush(product)
+
+            logger.info("\n\t[INFO] [product_service][update_status] Updated status of product with id {} to {}", id, dto.status)
+            return product.toDTO()
+        } catch(e: ProductNotFoundException) {
+            logger.warn("\n\t[WARN] [product_service][update_status] Product with id {} not found", id)
+            throw e
+        } catch(e: InvalidProductStatusException) {
+            logger.warn("\n\t[WARN] [product_service][update_status] Invalid status transition: {}", e.message)
+            throw e
+        } catch(e: Exception) {
+            logger.error("\n\t[ERROR] [product_service][update_status] Error updating status of product with id {}: {}", id, e.message, e)
             throw e
         }
     }
