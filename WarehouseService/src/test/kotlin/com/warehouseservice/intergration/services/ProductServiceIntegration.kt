@@ -1,10 +1,13 @@
 package com.warehouseservice.intergration.services
 
+import com.warehouseservice.exceptions.InvalidProductStatusException
 import com.warehouseservice.exceptions.ProductNotFoundException
 import com.warehouseservice.exceptions.ProductWithBarCodeAlreadyExistsException
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.services.ProductService
 import io.kotest.assertions.throwables.shouldThrow
@@ -23,6 +26,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import java.util.UUID
 
 @SpringBootTest
 @Testcontainers
@@ -166,7 +170,7 @@ class ProductServiceIntegration {
         @Test
         fun `throws ProductNotFoundException when product does not exist`() {
             val ex = shouldThrow<ProductNotFoundException> {
-                productService.findByID(java.util.UUID.randomUUID())
+                productService.findByID(UUID.randomUUID())
             }
 
             ex.message shouldContain "not found"
@@ -227,7 +231,7 @@ class ProductServiceIntegration {
         fun `throws ProductNotFoundException when product does not exist`() {
             shouldThrow<ProductNotFoundException> {
                 productService.update(
-                    java.util.UUID.randomUUID(),
+                    UUID.randomUUID(),
                     UpdateProductDTO(name = "Product 1", barCode = "20245918")
                 )
             }
@@ -243,6 +247,66 @@ class ProductServiceIntegration {
                     product2.id!!,
                     UpdateProductDTO(name = "Product 2 updated", barCode = "8001120896247")
                 )
+            }
+        }
+    }
+
+    // ── updateStatus ─────────────────────────────────────────────────────────────
+
+    @Nested
+    inner class UpdateStatus {
+
+        @Test
+        fun `updates status to ASSIGNED with assignedTo`() {
+            val saved = saveProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi")
+
+            val result = productService.updateStatus(saved.id!!, dto)
+
+            result.status shouldBe ProductStatus.ASSIGNED
+            result.assignedTo shouldBe "Mario Rossi"
+
+            val fromDb = productRepository.findById(saved.id!!).get()
+            fromDb.status shouldBe ProductStatus.ASSIGNED
+            fromDb.assignedTo shouldBe "Mario Rossi"
+        }
+
+        @Test
+        fun `updates status from ASSIGNED back to IN_WAREHOUSE clears assignedTo`() {
+            val saved = saveProduct()
+            productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi"))
+
+            val result = productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE))
+
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
+            result.assignedTo shouldBe null
+
+            val fromDb = productRepository.findById(saved.id!!).get()
+            fromDb.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED without assignedTo`() {
+            val saved = saveProduct()
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.ASSIGNED))
+            }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when non-ASSIGNED with assignedTo`() {
+            val saved = saveProduct()
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.DAMAGED, assignedTo = "Mario Rossi"))
+            }
+        }
+
+        @Test
+        fun `throws ProductNotFoundException when product does not exist`() {
+            shouldThrow<ProductNotFoundException> {
+                productService.updateStatus(UUID.randomUUID(), UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE))
             }
         }
     }
@@ -263,7 +327,7 @@ class ProductServiceIntegration {
         @Test
         fun `throws ProductNotFoundException when product does not exist`() {
             shouldThrow<ProductNotFoundException> {
-                productService.deleteByID(java.util.UUID.randomUUID())
+                productService.deleteByID(UUID.randomUUID())
             }
         }
     }

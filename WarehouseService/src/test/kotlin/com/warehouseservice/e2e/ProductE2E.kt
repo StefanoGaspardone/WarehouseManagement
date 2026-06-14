@@ -4,7 +4,9 @@ import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -136,7 +138,69 @@ class ProductE2E {
         }
     }
 
-    // ── flow: errori e casi limite ─────────────────────────────────────────────
+    // ── flow: status changes ─────────────────────────────────────────────
+
+    @Nested
+    inner class StatusFlow {
+
+        @Test
+        fun `full status flow completes successfully`() {
+            val createResponse = restTemplate.postForEntity<ProductDTO>(
+                "/api/v1/products",
+                CreateProductDTO(name = "Product 1", barCode = "8001120896247")
+            )
+            createResponse.statusCode shouldBe HttpStatus.CREATED
+            createResponse.body!!.status shouldBe ProductStatus.IN_WAREHOUSE
+            createResponse.body!!.assignedTo shouldBe null
+
+            val id = createResponse.body!!.id!!
+
+            val assignResponse = restTemplate.exchange<ProductDTO>(
+                "/api/v1/products/$id/status",
+                HttpMethod.PATCH,
+                HttpEntity(UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi"))
+            )
+            assignResponse.statusCode shouldBe HttpStatus.OK
+            assignResponse.body!!.status shouldBe ProductStatus.ASSIGNED
+            assignResponse.body!!.assignedTo shouldBe "Mario Rossi"
+
+            val repairResponse = restTemplate.exchange<ProductDTO>(
+                "/api/v1/products/$id/status",
+                HttpMethod.PATCH,
+                HttpEntity(UpdateProductStatusDTO(status = ProductStatus.IN_REPAIR))
+            )
+            repairResponse.statusCode shouldBe HttpStatus.OK
+            repairResponse.body!!.status shouldBe ProductStatus.IN_REPAIR
+            repairResponse.body!!.assignedTo shouldBe null
+
+            val warehouseResponse = restTemplate.exchange<ProductDTO>(
+                "/api/v1/products/$id/status",
+                HttpMethod.PATCH,
+                HttpEntity(UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE))
+            )
+            warehouseResponse.statusCode shouldBe HttpStatus.OK
+            warehouseResponse.body!!.status shouldBe ProductStatus.IN_WAREHOUSE
+            warehouseResponse.body!!.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `returns 422 when ASSIGNED without assignedTo`() {
+            val created = restTemplate.postForEntity<ProductDTO>(
+                "/api/v1/products",
+                CreateProductDTO(name = "Product 1", barCode = "8001120896247")
+            ).body!!
+
+            val response = restTemplate.exchange<Map<*, *>>(
+                "/api/v1/products/${created.id}/status",
+                HttpMethod.PATCH,
+                HttpEntity(UpdateProductStatusDTO(status = ProductStatus.ASSIGNED))
+            )
+
+            response.statusCode.value() shouldBe HttpStatus.UNPROCESSABLE_ENTITY.value()
+        }
+    }
+
+    // ── flow: errors and edge cases ─────────────────────────────────────────────
 
     @Nested
     inner class ErrorFlows {

@@ -1,10 +1,13 @@
 package com.warehouseservice.unit.services
 
+import com.warehouseservice.exceptions.InvalidProductStatusException
 import com.warehouseservice.exceptions.ProductNotFoundException
 import com.warehouseservice.exceptions.ProductWithBarCodeAlreadyExistsException
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.services.ProductService
 import io.kotest.assertions.throwables.shouldThrow
@@ -290,6 +293,138 @@ class ProductServiceUnit {
 
             shouldThrow<RuntimeException> {
                 productService.update(fixedId, dto)
+            }
+        }
+    }
+
+    // ── updateStatus ─────────────────────────────────────────────────────────────
+
+    @Nested
+    inner class UpdateStatus {
+
+        @Test
+        fun `updates status to IN_WAREHOUSE successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.IN_WAREHOUSE }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to DAMAGED successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.DAMAGED)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.DAMAGED }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.DAMAGED
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to IN_REPAIR successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_REPAIR)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.IN_REPAIR }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.IN_REPAIR
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to ASSIGNED with assignedTo successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply {
+                status = ProductStatus.ASSIGNED
+                assignedTo = "Mario Rossi"
+            }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.ASSIGNED
+            result.assignedTo shouldBe "Mario Rossi"
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED without assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = null)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED with blank assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "  ")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when non-ASSIGNED status has assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE, assignedTo = "Mario Rossi")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws ProductNotFoundException when product does not exist`() {
+            val randomId = UUID.randomUUID()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(randomId) } returns Optional.empty()
+
+            shouldThrow<ProductNotFoundException> {
+                productService.updateStatus(randomId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(fixedId) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.updateStatus(fixedId, dto)
             }
         }
     }

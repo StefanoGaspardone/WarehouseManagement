@@ -2,7 +2,9 @@ package com.warehouseservice.intergration.controllers
 
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
@@ -20,6 +22,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import tools.jackson.module.kotlin.jacksonObjectMapper
+import java.util.UUID
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -161,7 +164,7 @@ class ProductControllerIntegration {
 
         @Test
         fun `returns 404 when product not found`() {
-            mockMvc.get("/api/v1/products/${java.util.UUID.randomUUID()}").andExpect {
+            mockMvc.get("/api/v1/products/${UUID.randomUUID()}").andExpect {
                 status { isNotFound() }
                 jsonPath("$.status") { value(404) }
             }
@@ -264,7 +267,7 @@ class ProductControllerIntegration {
 
         @Test
         fun `returns 404 when product not found`() {
-            mockMvc.patch("/api/v1/products/${java.util.UUID.randomUUID()}") {
+            mockMvc.patch("/api/v1/products/${UUID.randomUUID()}") {
                 contentType = MediaType.APPLICATION_JSON
                 content = objectMapper.writeValueAsString(
                     UpdateProductDTO(name = "Product 1", barCode = "20245918")
@@ -292,6 +295,95 @@ class ProductControllerIntegration {
         }
     }
 
+    // ── PATCH /api/v1/products/{id}/status ───────────────────────────────────────────
+
+    @Nested
+    inner class UpdateStatus {
+
+        @Test
+        fun `returns 200 and updates status to ASSIGNED`() {
+            val saved = saveProduct()
+
+            mockMvc.patch("/api/v1/products/${saved.id}/status") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(
+                    UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi")
+                )
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("ASSIGNED") }
+                jsonPath("$.assignedTo") { value("Mario Rossi") }
+            }
+
+            val fromDb = productRepository.findById(saved.id!!).get()
+            fromDb.status shouldBe ProductStatus.ASSIGNED
+            fromDb.assignedTo shouldBe "Mario Rossi"
+        }
+
+        @Test
+        fun `returns 200 and clears assignedTo when status changes from ASSIGNED`() {
+            val saved = saveProduct()
+            productRepository.save(saved.apply {
+                status = ProductStatus.ASSIGNED
+                assignedTo = "Mario Rossi"
+            })
+
+            mockMvc.patch("/api/v1/products/${saved.id}/status") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(
+                    UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+                )
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.status") { value("IN_WAREHOUSE") }
+                jsonPath("$.assignedTo") { doesNotExist() }
+            }
+        }
+
+        @Test
+        fun `returns 404 when product not found`() {
+            mockMvc.patch("/api/v1/products/${UUID.randomUUID()}/status") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(
+                    UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+                )
+            }.andExpect {
+                status { isNotFound() }
+                jsonPath("$.status") { value(404) }
+            }
+        }
+
+        @Test
+        fun `returns 422 when ASSIGNED without assignedTo`() {
+            val saved = saveProduct()
+
+            mockMvc.patch("/api/v1/products/${saved.id}/status") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(
+                    UpdateProductStatusDTO(status = ProductStatus.ASSIGNED)
+                )
+            }.andExpect {
+                status { isUnprocessableContent() }
+                jsonPath("$.status") { value(422) }
+            }
+        }
+
+        @Test
+        fun `returns 422 when non-ASSIGNED status has assignedTo`() {
+            val saved = saveProduct()
+
+            mockMvc.patch("/api/v1/products/${saved.id}/status") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(
+                    UpdateProductStatusDTO(status = ProductStatus.DAMAGED, assignedTo = "Mario Rossi")
+                )
+            }.andExpect {
+                status { isUnprocessableContent() }
+                jsonPath("$.status") { value(422) }
+            }
+        }
+    }
+
     // ── DELETE /api/v1/products/{id} ───────────────────────────────────────────
 
     @Nested
@@ -310,7 +402,7 @@ class ProductControllerIntegration {
 
         @Test
         fun `returns 404 when product not found`() {
-            mockMvc.delete("/api/v1/products/${java.util.UUID.randomUUID()}").andExpect {
+            mockMvc.delete("/api/v1/products/${UUID.randomUUID()}").andExpect {
                 status { isNotFound() }
                 jsonPath("$.status") { value(404) }
             }
