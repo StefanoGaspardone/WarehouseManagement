@@ -1,10 +1,13 @@
 package com.warehouseservice.unit.services
 
+import com.warehouseservice.exceptions.InvalidProductStatusException
 import com.warehouseservice.exceptions.ProductNotFoundException
 import com.warehouseservice.exceptions.ProductWithBarCodeAlreadyExistsException
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.services.ProductService
 import io.kotest.assertions.throwables.shouldThrow
@@ -17,6 +20,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.data.jpa.domain.Specification
 import java.time.Instant
 import java.util.*
@@ -54,7 +58,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            val result = productService.findAll(0, 20, null, null, "name-asc")
+            val result = productService.findAll(0, 20, null, null, null, "name-asc")
 
             result.totalElements shouldBe 1
             result.content.size shouldBe 1
@@ -68,7 +72,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns emptyPage
 
-            val result = productService.findAll(0, 20, "Non existing product", null, null)
+            val result = productService.findAll(0, 20, "Non existing product", null, null, null)
 
             result.totalElements shouldBe 0
             result.content shouldBe emptyList()
@@ -82,7 +86,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(-5, 20, null, null, null)
+            productService.findAll(-5, 20, null, null, null, null)
 
             verify {
                 productRepository.findAll(
@@ -99,7 +103,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 999, null, null, null)
+            productService.findAll(0, 999, null, null, null, null)
 
             verify {
                 productRepository.findAll(
@@ -116,7 +120,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "non_existing_field-asc")
+            productService.findAll(0, 20, null, null, null, "non_existing_field-asc")
 
             verify {
                 productRepository.findAll(
@@ -125,6 +129,17 @@ class ProductServiceUnit {
                         it.sort.getOrderFor("name") != null
                     }
                 )
+            }
+        }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            every {
+                productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>())
+            } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.findAll(0, 20, null, null, null, null)
             }
         }
     }
@@ -156,6 +171,15 @@ class ProductServiceUnit {
                 productService.findByID(randomId)
             }
         }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            every { productRepository.findById(any()) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.findByID(fixedId)
+            }
+        }
     }
 
     // ── create ─────────────────────────────────────────────────────────────────
@@ -181,6 +205,24 @@ class ProductServiceUnit {
         }
 
         @Test
+        fun `creates a product should set status to IN_WAREHOUSE`() {
+            val dto = CreateProductDTO(name = "Product 1", barCode = "8001120896247")
+            val savedProduct = makeProduct()
+
+            every { productRepository.findByBarCode(dto.barCode) } returns Optional.empty()
+            every { productRepository.save(any()) } returns savedProduct
+
+            val result = productService.create(dto)
+
+            result.id shouldNotBe null
+            result.name shouldBe "Product 1"
+            result.barCode shouldBe "8001120896247"
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
+
+            verify(exactly = 1) { productRepository.save(any()) }
+        }
+
+        @Test
         fun `throws ProductWithBarCodeAlreadyExistsException when barcode already exists`() {
             val dto = CreateProductDTO(name = "Product 1", barCode = "8001120896247")
             val existingProduct = makeProduct()
@@ -192,6 +234,18 @@ class ProductServiceUnit {
             }
 
             verify(exactly = 0) { productRepository.save(any()) }
+        }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            val dto = CreateProductDTO(name = "Product 1", barCode = "8001120896247")
+
+            every { productRepository.findByBarCode(any()) } returns Optional.empty()
+            every { productRepository.save(any()) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.create(dto)
+            }
         }
     }
 
@@ -245,6 +299,152 @@ class ProductServiceUnit {
 
             verify(exactly = 0) { productRepository.save(any()) }
         }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            val dto = UpdateProductDTO(name = "Product 1", barCode = "20245918")
+            val existingProduct = makeProduct()
+
+            every { productRepository.findById(fixedId) } returns Optional.of(existingProduct)
+            every { productRepository.findByBarCode(any()) } returns Optional.empty()
+            every { productRepository.save(any()) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.update(fixedId, dto)
+            }
+        }
+    }
+
+    // ── updateStatus ─────────────────────────────────────────────────────────────
+
+    @Nested
+    inner class UpdateStatus {
+
+        @Test
+        fun `updates status to IN_WAREHOUSE successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.IN_WAREHOUSE }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to DAMAGED successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.DAMAGED)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.DAMAGED }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.DAMAGED
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to IN_REPAIR successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_REPAIR)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply { status = ProductStatus.IN_REPAIR }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.IN_REPAIR
+            result.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `updates status to ASSIGNED with assignedTo successfully`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+            every { productRepository.saveAndFlush(any()) } returns product.apply {
+                status = ProductStatus.ASSIGNED
+                assignedTo = "Mario Rossi"
+            }
+
+            val result = productService.updateStatus(fixedId, dto)
+
+            result.status shouldBe ProductStatus.ASSIGNED
+            result.assignedTo shouldBe "Mario Rossi"
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED without assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = null)
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED with blank assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "  ")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when non-ASSIGNED status has assignedTo`() {
+            val product = makeProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE, assignedTo = "Mario Rossi")
+
+            every { productRepository.findById(fixedId) } returns Optional.of(product)
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(fixedId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws ProductNotFoundException when product does not exist`() {
+            val randomId = UUID.randomUUID()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(randomId) } returns Optional.empty()
+
+            shouldThrow<ProductNotFoundException> {
+                productService.updateStatus(randomId, dto)
+            }
+
+            verify(exactly = 0) { productRepository.saveAndFlush(any()) }
+        }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            val dto = UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE)
+
+            every { productRepository.findById(fixedId) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.updateStatus(fixedId, dto)
+            }
+        }
     }
 
     // ── deleteByID ─────────────────────────────────────────────────────────────
@@ -275,6 +475,126 @@ class ProductServiceUnit {
             }
 
             verify(exactly = 0) { productRepository.deleteById(any()) }
+        }
+
+        @Test
+        fun `throws exception when repository fails unexpectedly`() {
+            val existingProduct = makeProduct()
+
+            every { productRepository.findById(fixedId) } returns Optional.of(existingProduct)
+            every { productRepository.deleteById(fixedId) } throws RuntimeException("DB connection lost")
+
+            shouldThrow<RuntimeException> {
+                productService.deleteByID(fixedId)
+            }
+        }
+    }
+
+    @Nested
+    inner class ResolveSort {
+
+        @Test
+        fun `sort null falls back to name asc`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, null)
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("name")?.direction == Sort.Direction.ASC
+                    }
+                )
+            }
+        }
+
+        @Test
+        fun `sort with valid field desc`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, "name-desc")
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("name")?.direction == Sort.Direction.DESC
+                    }
+                )
+            }
+        }
+
+        @Test
+        fun `sort with unsupported field falls back to name`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, "non_existing_field-asc")
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("name") != null
+                    }
+                )
+            }
+        }
+
+        @Test
+        fun `sort with blank field falls back to name`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, "  -asc")
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("name") != null
+                    }
+                )
+            }
+        }
+
+        @Test
+        fun `sort with createdAt field`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, "createdAt-asc")
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("createdAt") != null
+                    }
+                )
+            }
+        }
+
+        @Test
+        fun `sort without dash uses field as name and direction as asc`() {
+            val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
+            every {
+                productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>())
+            } returns pageResult
+
+            productService.findAll(0, 20, null, null, null, "name")
+
+            verify {
+                productRepository.findAll(
+                    any<Specification<Product>>(),
+                    match<org.springframework.data.domain.Pageable> {
+                        it.sort.getOrderFor("name")?.direction == Sort.Direction.ASC
+                    }
+                )
+            }
         }
     }
 }

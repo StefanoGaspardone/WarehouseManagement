@@ -5,6 +5,8 @@ import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.services.ProductService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -46,9 +48,10 @@ class ProductController(
         @RequestParam(required = false, defaultValue = "20") size: Int,
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) barCode: String?,
+        @RequestParam(required = false) status: ProductStatus?,
         @RequestParam(required = false, defaultValue = "name-asc") sort: String?,
     ): ResponseEntity<ProductPageDTO> =
-        ResponseEntity.ok(productService.findAll(page, size, name, barCode, sort))
+        ResponseEntity.ok(productService.findAll(page, size, name, barCode, status, sort))
 
     @Operation(summary = "Get a product")
     @ApiResponses(
@@ -129,6 +132,38 @@ class ProductController(
     @PatchMapping("/{id}")
     fun update(@PathVariable id: UUID, @Valid @RequestBody updateProductDTO: UpdateProductDTO): ResponseEntity<ProductDTO> =
         ResponseEntity.ok(productService.update(id, updateProductDTO))
+
+    @Operation(summary = "Update product status")
+    @ApiResponses(value = [
+        ApiResponse(responseCode = "200", description = "Ok - Successfully updated product status",
+            content = [Content(schema = Schema(implementation = ProductDTO::class))],
+        ),
+        ApiResponse(responseCode = "404", description = "Not Found - Product not found",
+            content = [Content(
+                mediaType = "application/json",
+                schema = Schema(implementation = ErrorResponse::class),
+                examples = [ExampleObject(
+                    name = "ProductNotFoundException",
+                    summary = "Product not found",
+                    value = "{\"timestamp\":\"2026-03-31T19:00:00Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Product with id 3fa85f64-5717-4562-b3fc-2c963f66afa6 not found\"}"
+                )]
+            )],
+        ),
+        ApiResponse(responseCode = "422", description = "Unprocessable Entity - Invalid status transition",
+            content = [Content(
+                mediaType = "application/json",
+                schema = Schema(implementation = ErrorResponse::class),
+                examples = [ExampleObject(
+                    name = "InvalidProductStatusException",
+                    summary = "Invalid status",
+                    value = "{\"timestamp\":\"2026-03-31T19:00:00Z\",\"status\":422,\"error\":\"Unprocessable Entity\",\"message\":\"assignedTo is required when status is ASSIGNED\"}"
+                )]
+            )],
+        ),
+    ])
+    @PatchMapping("/{id}/status")
+    fun updateStatus(@PathVariable id: UUID, @Valid @RequestBody dto: UpdateProductStatusDTO): ResponseEntity<ProductDTO> =
+        ResponseEntity.ok(productService.updateStatus(id, dto))
 
     @Operation(summary = "Delete a product")
     @ApiResponses(

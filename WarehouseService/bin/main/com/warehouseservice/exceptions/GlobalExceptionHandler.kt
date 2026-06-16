@@ -58,4 +58,15 @@ class GlobalExceptionHandler {
             ),
             HttpStatus.BAD_REQUEST,
         )
+
+    @ExceptionHandler(InvalidProductStatusException::class)
+    fun handleInvalidProductStatus(ex: InvalidProductStatusException): ResponseEntity<ErrorResponse> =
+        ResponseEntity(
+            ErrorResponse(
+                status = HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                error = HttpStatus.UNPROCESSABLE_ENTITY.reasonPhrase,
+                message = ex.message ?: "Invalid product status",
+            ),
+            HttpStatus.UNPROCESSABLE_ENTITY,
+        )
 }

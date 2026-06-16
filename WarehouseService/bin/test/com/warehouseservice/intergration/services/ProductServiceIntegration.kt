@@ -1,10 +1,13 @@
 package com.warehouseservice.intergration.services
 
+import com.warehouseservice.exceptions.InvalidProductStatusException
 import com.warehouseservice.exceptions.ProductNotFoundException
 import com.warehouseservice.exceptions.ProductWithBarCodeAlreadyExistsException
 import com.warehouseservice.models.dtos.CreateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
+import com.warehouseservice.models.dtos.UpdateProductStatusDTO
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.repositories.ProductRepository
 import com.warehouseservice.services.ProductService
 import io.kotest.assertions.throwables.shouldThrow
@@ -23,6 +26,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import java.util.UUID
 
 @SpringBootTest
 @Testcontainers
@@ -62,9 +66,9 @@ class ProductServiceIntegration {
 
     // ── fixture ────────────────────────────────────────────────────────────────
 
-    private fun saveProduct(name: String = "Product 1", barCode: String = "8001120896247"): Product =
+    private fun saveProduct(name: String = "Product 1", barCode: String = "8001120896247", status: ProductStatus = ProductStatus.IN_WAREHOUSE): Product =
         productRepository.save(
-            Product(name = name, barCode = barCode)
+            Product(name = name, barCode = barCode, status = status)
         )
 
     // ── findAll ────────────────────────────────────────────────────────────────
@@ -77,7 +81,7 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Product 2", "20245918")
 
-            val result = productService.findAll(0, 20, null, null, "name-asc")
+            val result = productService.findAll(0, 20, null, null, null, "name-asc")
 
             result.totalElements shouldBe 2
             result.content shouldHaveSize 2
@@ -88,7 +92,7 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Warehouse 1", "20245918")
 
-            val result = productService.findAll(0, 20, "produ", null, null)
+            val result = productService.findAll(0, 20, "produ", null, null, null)
 
             result.totalElements shouldBe 1
             result.content[0].name shouldBe "Product 1"
@@ -99,17 +103,29 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Product 2", "20245918")
 
-            val result = productService.findAll(0, 20, null, "80011", null)
+            val result = productService.findAll(0, 20, null, "80011", null, null)
 
             result.totalElements shouldBe 1
             result.content[0].barCode shouldBe "8001120896247"
         }
 
         @Test
+        fun `filters by status`() {
+            saveProduct("Product 1", "8001120896247", ProductStatus.IN_WAREHOUSE)
+            saveProduct("Product 2", "20245918", ProductStatus.DAMAGED)
+
+            val result = productService.findAll(0, 20, null, null, ProductStatus.DAMAGED, null)
+
+            result.totalElements shouldBe 1
+            result.content[0].name shouldBe "Product 2"
+            result.content[0].status shouldBe ProductStatus.DAMAGED
+        }
+
+        @Test
         fun `returns empty page when no products match filters`() {
             saveProduct("Product 1", "8001120896247")
 
-            val result = productService.findAll(0, 20, "Non existing product", null, null)
+            val result = productService.findAll(0, 20, "Non existing product", null, null, null)
 
             result.totalElements shouldBe 0
             result.empty shouldBe true
@@ -119,7 +135,7 @@ class ProductServiceIntegration {
         fun `respects pagination`() {
             repeat(5) { i -> saveProduct("Product $i", "800112089624$i") }
 
-            val result = productService.findAll(0, 2, null, null, null)
+            val result = productService.findAll(0, 2, null, null, null, null)
 
             result.content shouldHaveSize 2
             result.totalElements shouldBe 5
@@ -130,7 +146,7 @@ class ProductServiceIntegration {
         fun `clamps negative page to 0`() {
             saveProduct()
 
-            val result = productService.findAll(-5, 20, null, null, null)
+            val result = productService.findAll(-5, 20, null, null, null, null)
 
             result.number shouldBe 0
         }
@@ -139,7 +155,7 @@ class ProductServiceIntegration {
         fun `clamps size above 100 to 100`() {
             saveProduct()
 
-            val result = productService.findAll(0, 999, null, null, null)
+            val result = productService.findAll(0, 999, null, null, null, null)
 
             result.size shouldBe 100
         }
@@ -166,7 +182,7 @@ class ProductServiceIntegration {
         @Test
         fun `throws ProductNotFoundException when product does not exist`() {
             val ex = shouldThrow<ProductNotFoundException> {
-                productService.findByID(java.util.UUID.randomUUID())
+                productService.findByID(UUID.randomUUID())
             }
 
             ex.message shouldContain "not found"
@@ -227,7 +243,7 @@ class ProductServiceIntegration {
         fun `throws ProductNotFoundException when product does not exist`() {
             shouldThrow<ProductNotFoundException> {
                 productService.update(
-                    java.util.UUID.randomUUID(),
+                    UUID.randomUUID(),
                     UpdateProductDTO(name = "Product 1", barCode = "20245918")
                 )
             }
@@ -243,6 +259,66 @@ class ProductServiceIntegration {
                     product2.id!!,
                     UpdateProductDTO(name = "Product 2 updated", barCode = "8001120896247")
                 )
+            }
+        }
+    }
+
+    // ── updateStatus ─────────────────────────────────────────────────────────────
+
+    @Nested
+    inner class UpdateStatus {
+
+        @Test
+        fun `updates status to ASSIGNED with assignedTo`() {
+            val saved = saveProduct()
+            val dto = UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi")
+
+            val result = productService.updateStatus(saved.id!!, dto)
+
+            result.status shouldBe ProductStatus.ASSIGNED
+            result.assignedTo shouldBe "Mario Rossi"
+
+            val fromDb = productRepository.findById(saved.id!!).get()
+            fromDb.status shouldBe ProductStatus.ASSIGNED
+            fromDb.assignedTo shouldBe "Mario Rossi"
+        }
+
+        @Test
+        fun `updates status from ASSIGNED back to IN_WAREHOUSE clears assignedTo`() {
+            val saved = saveProduct()
+            productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.ASSIGNED, assignedTo = "Mario Rossi"))
+
+            val result = productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE))
+
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
+            result.assignedTo shouldBe null
+
+            val fromDb = productRepository.findById(saved.id!!).get()
+            fromDb.assignedTo shouldBe null
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when ASSIGNED without assignedTo`() {
+            val saved = saveProduct()
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.ASSIGNED))
+            }
+        }
+
+        @Test
+        fun `throws InvalidProductStatusException when non-ASSIGNED with assignedTo`() {
+            val saved = saveProduct()
+
+            shouldThrow<InvalidProductStatusException> {
+                productService.updateStatus(saved.id!!, UpdateProductStatusDTO(status = ProductStatus.DAMAGED, assignedTo = "Mario Rossi"))
+            }
+        }
+
+        @Test
+        fun `throws ProductNotFoundException when product does not exist`() {
+            shouldThrow<ProductNotFoundException> {
+                productService.updateStatus(UUID.randomUUID(), UpdateProductStatusDTO(status = ProductStatus.IN_WAREHOUSE))
             }
         }
     }
@@ -263,7 +339,7 @@ class ProductServiceIntegration {
         @Test
         fun `throws ProductNotFoundException when product does not exist`() {
             shouldThrow<ProductNotFoundException> {
-                productService.deleteByID(java.util.UUID.randomUUID())
+                productService.deleteByID(UUID.randomUUID())
             }
         }
     }

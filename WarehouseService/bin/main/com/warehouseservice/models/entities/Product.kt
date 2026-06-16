@@ -1,8 +1,11 @@
 package com.warehouseservice.models.entities
 
 import com.warehouseservice.models.dtos.ProductDTO
+import com.warehouseservice.models.enums.ProductStatus
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -35,6 +38,14 @@ class Product(
     @Column(name = "bar_code", nullable = false, unique = true, length = 13)
     var barCode: String,
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    var status: ProductStatus = ProductStatus.IN_WAREHOUSE,
+
+    @field:Size(max = 255)
+    @Column(name = "assigned_to", nullable = true, length = 255)
+    var assignedTo: String? = null,
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant? = null,
@@ -48,6 +59,8 @@ class Product(
             id = this.id,
             name = this.name,
             barCode = this.barCode,
+            status = this.status,
+            assignedTo = this.assignedTo,
             createdAt = this.createdAt,
             updatedAt = this.updatedAt
         )
