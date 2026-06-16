@@ -58,7 +58,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            val result = productService.findAll(0, 20, null, null, "name-asc")
+            val result = productService.findAll(0, 20, null, null, null, "name-asc")
 
             result.totalElements shouldBe 1
             result.content.size shouldBe 1
@@ -72,7 +72,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns emptyPage
 
-            val result = productService.findAll(0, 20, "Non existing product", null, null)
+            val result = productService.findAll(0, 20, "Non existing product", null, null, null)
 
             result.totalElements shouldBe 0
             result.content shouldBe emptyList()
@@ -86,7 +86,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(-5, 20, null, null, null)
+            productService.findAll(-5, 20, null, null, null, null)
 
             verify {
                 productRepository.findAll(
@@ -103,7 +103,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 999, null, null, null)
+            productService.findAll(0, 999, null, null, null, null)
 
             verify {
                 productRepository.findAll(
@@ -120,7 +120,7 @@ class ProductServiceUnit {
 
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "non_existing_field-asc")
+            productService.findAll(0, 20, null, null, null, "non_existing_field-asc")
 
             verify {
                 productRepository.findAll(
@@ -139,7 +139,7 @@ class ProductServiceUnit {
             } throws RuntimeException("DB connection lost")
 
             shouldThrow<RuntimeException> {
-                productService.findAll(0, 20, null, null, null)
+                productService.findAll(0, 20, null, null, null, null)
             }
         }
     }
@@ -200,6 +200,24 @@ class ProductServiceUnit {
             result.id shouldNotBe null
             result.name shouldBe "Product 1"
             result.barCode shouldBe "8001120896247"
+
+            verify(exactly = 1) { productRepository.save(any()) }
+        }
+
+        @Test
+        fun `creates a product should set status to IN_WAREHOUSE`() {
+            val dto = CreateProductDTO(name = "Product 1", barCode = "8001120896247")
+            val savedProduct = makeProduct()
+
+            every { productRepository.findByBarCode(dto.barCode) } returns Optional.empty()
+            every { productRepository.save(any()) } returns savedProduct
+
+            val result = productService.create(dto)
+
+            result.id shouldNotBe null
+            result.name shouldBe "Product 1"
+            result.barCode shouldBe "8001120896247"
+            result.status shouldBe ProductStatus.IN_WAREHOUSE
 
             verify(exactly = 1) { productRepository.save(any()) }
         }
@@ -480,7 +498,7 @@ class ProductServiceUnit {
             val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, null)
+            productService.findAll(0, 20, null, null, null, null)
 
             verify {
                 productRepository.findAll(
@@ -497,7 +515,7 @@ class ProductServiceUnit {
             val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "name-desc")
+            productService.findAll(0, 20, null, null, null, "name-desc")
 
             verify {
                 productRepository.findAll(
@@ -514,7 +532,7 @@ class ProductServiceUnit {
             val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "non_existing_field-asc")
+            productService.findAll(0, 20, null, null, null, "non_existing_field-asc")
 
             verify {
                 productRepository.findAll(
@@ -531,7 +549,7 @@ class ProductServiceUnit {
             val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "  -asc")
+            productService.findAll(0, 20, null, null, null, "  -asc")
 
             verify {
                 productRepository.findAll(
@@ -548,7 +566,7 @@ class ProductServiceUnit {
             val pageResult = PageImpl(emptyList<Product>(), PageRequest.of(0, 20), 0)
             every { productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>()) } returns pageResult
 
-            productService.findAll(0, 20, null, null, "createdAt-asc")
+            productService.findAll(0, 20, null, null, null, "createdAt-asc")
 
             verify {
                 productRepository.findAll(
@@ -567,7 +585,7 @@ class ProductServiceUnit {
                 productRepository.findAll(any<Specification<Product>>(), any<org.springframework.data.domain.Pageable>())
             } returns pageResult
 
-            productService.findAll(0, 20, null, null, "name")
+            productService.findAll(0, 20, null, null, null, "name")
 
             verify {
                 productRepository.findAll(

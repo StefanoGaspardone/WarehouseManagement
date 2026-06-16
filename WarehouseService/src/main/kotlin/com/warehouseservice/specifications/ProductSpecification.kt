@@ -1,11 +1,12 @@
 package com.warehouseservice.specifications
 
 import com.warehouseservice.models.entities.Product
+import com.warehouseservice.models.enums.ProductStatus
 import jakarta.persistence.criteria.Predicate
 import org.springframework.data.jpa.domain.Specification
 
 object ProductSpecifications {
-    fun withFilters(name: String?, barCode: String?): Specification<Product> {
+    fun withFilters(name: String?, barCode: String?, status: ProductStatus?): Specification<Product> {
         return Specification { root, _, cb ->
             val predicates = mutableListOf<Predicate>()
 
@@ -23,6 +24,10 @@ object ProductSpecifications {
                 }
 
                 predicates.add(cb.and(*namePredicates.toTypedArray()))
+            }
+
+            status?.let {
+                predicates.add(cb.equal(root.get<ProductStatus>("status"), it))
             }
 
             // maybe add Elasticsearch

@@ -66,9 +66,9 @@ class ProductServiceIntegration {
 
     // ── fixture ────────────────────────────────────────────────────────────────
 
-    private fun saveProduct(name: String = "Product 1", barCode: String = "8001120896247"): Product =
+    private fun saveProduct(name: String = "Product 1", barCode: String = "8001120896247", status: ProductStatus = ProductStatus.IN_WAREHOUSE): Product =
         productRepository.save(
-            Product(name = name, barCode = barCode)
+            Product(name = name, barCode = barCode, status = status)
         )
 
     // ── findAll ────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Product 2", "20245918")
 
-            val result = productService.findAll(0, 20, null, null, "name-asc")
+            val result = productService.findAll(0, 20, null, null, null, "name-asc")
 
             result.totalElements shouldBe 2
             result.content shouldHaveSize 2
@@ -92,7 +92,7 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Warehouse 1", "20245918")
 
-            val result = productService.findAll(0, 20, "produ", null, null)
+            val result = productService.findAll(0, 20, "produ", null, null, null)
 
             result.totalElements shouldBe 1
             result.content[0].name shouldBe "Product 1"
@@ -103,17 +103,29 @@ class ProductServiceIntegration {
             saveProduct("Product 1", "8001120896247")
             saveProduct("Product 2", "20245918")
 
-            val result = productService.findAll(0, 20, null, "80011", null)
+            val result = productService.findAll(0, 20, null, "80011", null, null)
 
             result.totalElements shouldBe 1
             result.content[0].barCode shouldBe "8001120896247"
         }
 
         @Test
+        fun `filters by status`() {
+            saveProduct("Product 1", "8001120896247", ProductStatus.IN_WAREHOUSE)
+            saveProduct("Product 2", "20245918", ProductStatus.DAMAGED)
+
+            val result = productService.findAll(0, 20, null, null, ProductStatus.DAMAGED, null)
+
+            result.totalElements shouldBe 1
+            result.content[0].name shouldBe "Product 2"
+            result.content[0].status shouldBe ProductStatus.DAMAGED
+        }
+
+        @Test
         fun `returns empty page when no products match filters`() {
             saveProduct("Product 1", "8001120896247")
 
-            val result = productService.findAll(0, 20, "Non existing product", null, null)
+            val result = productService.findAll(0, 20, "Non existing product", null, null, null)
 
             result.totalElements shouldBe 0
             result.empty shouldBe true
@@ -123,7 +135,7 @@ class ProductServiceIntegration {
         fun `respects pagination`() {
             repeat(5) { i -> saveProduct("Product $i", "800112089624$i") }
 
-            val result = productService.findAll(0, 2, null, null, null)
+            val result = productService.findAll(0, 2, null, null, null, null)
 
             result.content shouldHaveSize 2
             result.totalElements shouldBe 5
@@ -134,7 +146,7 @@ class ProductServiceIntegration {
         fun `clamps negative page to 0`() {
             saveProduct()
 
-            val result = productService.findAll(-5, 20, null, null, null)
+            val result = productService.findAll(-5, 20, null, null, null, null)
 
             result.number shouldBe 0
         }
@@ -143,7 +155,7 @@ class ProductServiceIntegration {
         fun `clamps size above 100 to 100`() {
             saveProduct()
 
-            val result = productService.findAll(0, 999, null, null, null)
+            val result = productService.findAll(0, 999, null, null, null, null)
 
             result.size shouldBe 100
         }

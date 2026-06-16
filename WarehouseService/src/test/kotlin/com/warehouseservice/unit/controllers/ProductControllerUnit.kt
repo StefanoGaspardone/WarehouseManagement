@@ -81,7 +81,7 @@ class ProductControllerUnit {
         @Test
         fun `returns 200 with paged products`() {
             val pageDTO = makeProductPageDTO()
-            every { productService.findAll(any(), any(), any(), any(), any()) } returns pageDTO
+            every { productService.findAll(any(), any(), any(), any(), any(), any()) } returns pageDTO
 
             mockMvc.get("/api/v1/products").andExpect {
                 status { isOk() }
@@ -95,7 +95,7 @@ class ProductControllerUnit {
         @Test
         fun `returns 200 with empty page when no products match`() {
             val emptyPage = makeProductPageDTO(emptyList())
-            every { productService.findAll(any(), any(), any(), any(), any()) } returns emptyPage
+            every { productService.findAll(any(), any(), any(), any(), any(), any()) } returns emptyPage
 
             mockMvc.get("/api/v1/products") {
                 param("name", "nonexistent")
@@ -109,19 +109,20 @@ class ProductControllerUnit {
         @Test
         fun `passes query params correctly to service`() {
             val pageDTO = makeProductPageDTO()
-            every { productService.findAll(1, 10, "product", "800112", "name-desc") } returns pageDTO
+            every { productService.findAll(1, 10, "product", "800112", ProductStatus.IN_WAREHOUSE, "name-desc") } returns pageDTO
 
             mockMvc.get("/api/v1/products") {
                 param("page", "1")
                 param("size", "10")
                 param("name", "product")
                 param("barCode", "800112")
+                param("status", "IN_WAREHOUSE")
                 param("sort", "name-desc")
             }.andExpect {
                 status { isOk() }
             }
 
-            verify { productService.findAll(1, 10, "product", "800112", "name-desc") }
+            verify { productService.findAll(1, 10, "product", "800112", ProductStatus.IN_WAREHOUSE, "name-desc") }
         }
     }
 

@@ -30,8 +30,8 @@ class ProductService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     @Transactional
-    fun findAll(page: Int, size: Int, name: String?, barCode: String?, sort: String?): ProductPageDTO {
-        logger.debug("\n\t[DEBUG] [product_service][find_all] Retrieving product with filters\n\tpage={}\n\tsize={}\n\tname={}\n\tbarCode={}\n\tsort={}", page, size, name, barCode, sort)
+    fun findAll(page: Int, size: Int, name: String?, barCode: String?, status: ProductStatus?, sort: String?): ProductPageDTO {
+        logger.debug("\n\t[DEBUG] [product_service][find_all] Retrieving product with filters\n\tpage={}\n\tsize={}\n\tname={}\n\tbarCode={}\n\tstatus={}\n\tsort={}", page, size, name, barCode, status, sort)
 
         try {
             val pageSafe = if(page < 0) 0 else page
@@ -40,7 +40,7 @@ class ProductService(
 
             val pageable = PageRequest.of(pageSafe, sizeSafe, sortObj)
 
-            val spec = ProductSpecifications.withFilters(name, barCode)
+            val spec = ProductSpecifications.withFilters(name, barCode, status)
             val result = productRepository.findAll(spec, pageable)
 
             logger.info("\n\t[INFO] [product_service][find_all] Retrieved products\n\tpage={}\n\tsize={}\n\tresultSize={}\n\ttotalElements={}", pageSafe, sizeSafe, result.numberOfElements, result.totalElements)

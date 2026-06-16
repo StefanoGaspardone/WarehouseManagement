@@ -6,6 +6,7 @@ import com.warehouseservice.models.dtos.ProductDTO
 import com.warehouseservice.models.dtos.ProductPageDTO
 import com.warehouseservice.models.dtos.UpdateProductDTO
 import com.warehouseservice.models.dtos.UpdateProductStatusDTO
+import com.warehouseservice.models.enums.ProductStatus
 import com.warehouseservice.services.ProductService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -47,9 +48,10 @@ class ProductController(
         @RequestParam(required = false, defaultValue = "20") size: Int,
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) barCode: String?,
+        @RequestParam(required = false) status: ProductStatus?,
         @RequestParam(required = false, defaultValue = "name-asc") sort: String?,
     ): ResponseEntity<ProductPageDTO> =
-        ResponseEntity.ok(productService.findAll(page, size, name, barCode, sort))
+        ResponseEntity.ok(productService.findAll(page, size, name, barCode, status, sort))
 
     @Operation(summary = "Get a product")
     @ApiResponses(
